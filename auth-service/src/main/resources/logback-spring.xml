@@ -1,0 +1,34 @@
+<configuration>
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name"
+        defaultValue="auth-service" />
+    <!-- Appender para registrar los logs en consola -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level [${APP_NAME}] %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+    <!-- Appender para registrar los logs en Loki -->
+    <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
+        <http>
+            <url>${LOKI_URL:-http://localhost:3100/loki/api/v1/push}</url>
+            <connectionTimeoutMs>3000</connectionTimeoutMs>
+            <requestTimeoutMs>5000</requestTimeoutMs>
+        </http>
+        <format>
+            <label>
+                <pattern>app=${APP_NAME},host=${HOSTNAME},level=%level</pattern>
+            </label>
+            <message class="com.github.loki4j.logback.JsonLayout">
+                <encoder class="net.logstash.logback.encoder.LogstashEncoder" />
+            </message>
+        </format>
+        <drainOnStop>false</drainOnStop>
+        <metricsEnabled>false</metricsEnabled>
+        <verbose>false</verbose>
+    </appender>
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="LOKI" />
+    </root>
+</configuration>
