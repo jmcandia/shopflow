@@ -1,0 +1,90 @@
+services:
+  mysql:
+    image: mysql:latest
+    container_name: mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ""
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "--silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ./.docker/mysql:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - observabilidad
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: phpmyadmin
+    ports:
+      - "8090:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: root
+      PMA_PASSWORD: ""
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - observabilidad
+  loki:
+    image: grafana/loki:main-8de9ca4
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD", "loki", "-version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - ./.docker/loki:/loki
+    networks:
+      - observabilidad
+  grafana:
+    image: grafana/grafana:main-ubuntu
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      loki:
+        condition: service_healthy
+    volumes:
+      - ./.docker/grafana:/var/lib/grafana
+    networks:
+      - observabilidad
+  auth:
+    profiles:
+      - servicios
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/shopflow_users_db
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ""
+      LOKI_URL: http://loki:3100/loki/api/v1/push
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    networks:
+      - observabilidad
+
+networks:
+  observabilidad:
+    driver: bridge
